@@ -1255,6 +1255,33 @@ async function generateImage() {
   }
 }
 
+function _createVideoProgressBar() {
+  const wrap = document.createElement('div');
+  wrap.className = 'video-progress-wrap';
+  wrap.innerHTML = `
+    <div class="video-progress-label">
+      <span class="video-progress-status">正在生成视频...</span>
+      <span class="video-progress-pct">0%</span>
+    </div>
+    <div class="video-progress-track">
+      <div class="video-progress-fill" style="width:0%"></div>
+    </div>`;
+  return wrap;
+}
+
+function _updateVideoProgress(progressEl, pct) {
+  if (!progressEl) return;
+  const fill = progressEl.querySelector('.video-progress-fill');
+  const label = progressEl.querySelector('.video-progress-pct');
+  const status = progressEl.querySelector('.video-progress-status');
+  if (fill) fill.style.width = pct + '%';
+  if (label) label.textContent = pct + '%';
+  if (status && pct >= 100) {
+    status.textContent = '生成完成，正在加载视频...';
+    if (fill) fill.classList.add('done');
+  }
+}
+
 async function generateVideo() {
   const prompt = String(q('video-prompt').value || '').trim();
   if (!prompt) return showToast('请输入 prompt', 'warning');
@@ -1316,10 +1343,16 @@ async function streamVideo(body, bubbleEl) {
     const t = await res.text().catch(() => '');
     throw new Error(`HTTP ${res.status}: ${t.slice(0, 200)}`);
   }
+
+  const progressBar = _createVideoProgressBar();
+  bubbleEl.parentNode.insertBefore(progressBar, bubbleEl);
+
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
   let acc = '';
+  const progressRe = /<!--video-progress:(\d+)-->/g;
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -1330,17 +1363,29 @@ async function streamVideo(body, bubbleEl) {
       const line = part.trim();
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
-      if (payload === '[DONE]') return;
+      if (payload === '[DONE]') {
+        if (progressBar.parentNode) progressBar.remove();
+        return;
+      }
       try {
         const obj = JSON.parse(payload);
         const delta = obj?.choices?.[0]?.delta?.content;
         if (typeof delta === 'string' && delta) {
-          acc += delta;
-          renderContent(bubbleEl, acc, false);
+          let match;
+          progressRe.lastIndex = 0;
+          while ((match = progressRe.exec(delta)) !== null) {
+            _updateVideoProgress(progressBar, parseInt(match[1], 10));
+          }
+          const cleaned = delta.replace(progressRe, '');
+          if (cleaned) {
+            acc += cleaned;
+            renderContent(bubbleEl, acc, false);
+          }
         }
       } catch (e) {}
     }
   }
+  if (progressBar.parentNode) progressBar.remove();
 }
 
 if (document.readyState === 'loading') {

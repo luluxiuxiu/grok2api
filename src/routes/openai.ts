@@ -1252,7 +1252,7 @@ openAiRoutes.post("/chat/completions", async (c) => {
       const imgInputs = isVideoModel && images.length > 1 ? images.slice(0, 1) : images;
 
       try {
-        const uploads = await mapLimit(imgInputs, 5, (u) => uploadImage(u, cookie, settingsBundle.grok));
+        const uploads = await mapLimit(imgInputs, 5, (u) => uploadImage(u, cookie, settingsBundle.grok, c.env.KV_CACHE));
         const imgIds = uploads.map((u) => u.fileId).filter(Boolean);
         const imgUris = uploads.map((u) => u.fileUri).filter(Boolean);
 
@@ -1763,7 +1763,7 @@ openAiRoutes.post("/images/edits", async (c) => {
       }
 
       const dataUrl = `data:${mime};base64,${arrayBufferToBase64(bytes)}`;
-      const uploaded = await uploadImage(dataUrl, cookie, settingsBundle.grok);
+      const uploaded = await uploadImage(dataUrl, cookie, settingsBundle.grok, c.env.KV_CACHE);
       if (uploaded.fileId) fileIds.push(uploaded.fileId);
       if (uploaded.fileUri) fileUris.push(uploaded.fileUri);
     }

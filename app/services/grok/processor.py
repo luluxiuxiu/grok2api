@@ -329,6 +329,9 @@ class VideoStreamProcessor(BaseProcessor):
                 if video_resp := resp.get("streamingVideoGenerationResponse"):
                     progress = video_resp.get("progress", 0)
                     
+                    # 始终发送进度标记，前端可解析为进度条
+                    yield self._sse(f"<!--video-progress:{progress}-->")
+                    
                     if self.show_think:
                         if not self.think_opened:
                             yield self._sse("<think>\n")
@@ -336,12 +339,12 @@ class VideoStreamProcessor(BaseProcessor):
                         yield self._sse(f"正在生成视频中，当前进度{progress}%\n")
                     
                     if progress == 100:
-                        video_url = video_resp.get("videoUrl", "")
-                        thumbnail_url = video_resp.get("thumbnailImageUrl", "")
-                        
                         if self.think_opened and self.show_think:
                             yield self._sse("</think>\n")
                             self.think_opened = False
+                        
+                        video_url = video_resp.get("videoUrl", "")
+                        thumbnail_url = video_resp.get("thumbnailImageUrl", "")
                         
                         if video_url:
                             final_video_url = await self.process_url(video_url, "video")
